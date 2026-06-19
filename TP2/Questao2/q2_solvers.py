@@ -123,13 +123,36 @@ def coleta_historico(solucao):
 
 
 # ---------------------------------------------------------------------------
+# Critério de parada (derivado)
+# ---------------------------------------------------------------------------
+def status_convergencia(solucao, maxit=10000, maxaval=10000, precisao=1e-6):
+    """Reconstrói o critério de parada a partir dos dados de `solucao`.
+
+    O `Solution.__init__` de otimo.py ignora o argumento `criterio_parada`
+    (faz `self.criterio_parada = None` fixo), então o campo é sempre None.
+    Aqui replicamos a lógica de decisão dos métodos restritos usando
+    iter/aval/xhist, com os mesmos limiares usados na execução.
+    """
+    if solucao.iter >= maxit:
+        return "máximo de iterações atingido"
+    if solucao.aval >= maxaval:
+        return "máximo de avaliações atingido"
+    # otimo.py compara o ponto atual (xhist[-1]) com xhist[-5] (5 atrás).
+    xhist = _normaliza_xhist(solucao.xhist)
+    if len(xhist) >= 5 and np.linalg.norm(xhist[-1] - xhist[-5]) < precisao:
+        return f"convergência (Δx < {precisao:g})"
+    return "critério de convergência atingido"
+
+
+# ---------------------------------------------------------------------------
 # Resumo por método (substitui `relata`)
 # ---------------------------------------------------------------------------
-def resumo(nome, solucao):
+def resumo(nome, solucao, maxit=10000, maxaval=10000, precisao=1e-6):
     """Imprime um resumo comparável da solução de um método."""
     P = np.asarray(solucao.x, dtype=float).flatten()
     viol = Restrita().calcula_violacoes(P, RESTRICOES, TIPOS)
     PL = perda_transmissao(P)
+    status = status_convergencia(solucao, maxit, maxaval, precisao)
 
     print(f"\n===== {nome} =====")
     print(f"P*               = {P}")
@@ -139,7 +162,7 @@ def resumo(nome, solucao):
     print(f"ΣP - PL          = {P.sum() - PL:.4f} MW (alvo = {DEMANDA:.1f})")
     print(f"iterações        = {solucao.iter}")
     print(f"avaliações       = {solucao.aval}")
-    print(f"critério parada  = {solucao.criterio_parada}")
+    print(f"critério parada  = {status}")
     print(f"|h_balanco|      = {abs(h_balanco(P)):.3e}")
     print(f"violação máxima  = {max(viol):.3e}")
     print(f"custo incremental= {custo_incremental(P)}")
@@ -154,6 +177,7 @@ def resumo(nome, solucao):
         "aval": int(solucao.aval),
         "viol_max": float(max(viol)),
         "viol_balanco": float(abs(h_balanco(P))),
+        "status": status,
     }
 
 
